@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import TitleForm from "@/components/TitleForm";
 import ThumbnailCanvas, { ThumbnailCanvasHandle } from "@/components/ThumbnailCanvas";
 import { Template } from "@/lib/templates";
@@ -50,6 +51,14 @@ export default function Home() {
           <p className="text-gray-500 text-sm">
             記事タイトルを入力するだけで、AIが最適な見出し画像を生成します
           </p>
+          <div className="mt-4">
+            <Link
+              href="/article"
+              className="text-sm text-indigo-500 hover:text-indigo-700 underline"
+            >
+              記事ジェネレーターへ（テーマから記事＋画像を作成）
+            </Link>
+          </div>
         </div>
 
         {/* Form */}
