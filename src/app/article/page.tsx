@@ -57,24 +57,43 @@ export default function ArticlePage() {
     setThumbResult(null);
     setSaved(false);
 
-    // ステップ表示のタイマー
-    const t1 = setTimeout(() => setLoadingStep(1), 8000);
-    const t2 = setTimeout(() => setLoadingStep(2), 20000);
-
     try {
       const res = await fetch("/api/article", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: query.trim() }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setResult(data);
+
+      if (!res.ok || !res.body) {
+        const text = await res.text();
+        try { throw new Error(JSON.parse(text).error); } catch { throw new Error(text); }
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const event = JSON.parse(line.slice(6));
+          if (event.type === "step") {
+            setLoadingStep(event.step);
+          } else if (event.type === "result") {
+            setResult(event.data);
+          } else if (event.type === "error") {
+            throw new Error(event.message);
+          }
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "エラーが発生しました");
     } finally {
-      clearTimeout(t1);
-      clearTimeout(t2);
       setLoading(false);
     }
   };
