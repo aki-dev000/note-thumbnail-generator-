@@ -57,11 +57,19 @@ async function tavilySearch(query: string, youtube = false) {
 }
 
 export async function POST(req: NextRequest) {
-  const { query } = await req.json();
+  let query: string;
+  try {
+    const body = await req.json();
+    query = body.query;
+  } catch {
+    return NextResponse.json({ error: "リクエストの形式が不正です" }, { status: 400 });
+  }
 
   if (!query || typeof query !== "string" || query.trim().length === 0) {
     return NextResponse.json({ error: "クエリを入力してください" }, { status: 400 });
   }
+
+  try {
 
   const systemPrompt = `あなたはnoteクリエイター向けの記事作成AIエージェントです。
 ユーザーのテーマについて以下を実行してください：
@@ -155,5 +163,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ error: "エージェントの最大試行回数を超えました" }, { status: 500 });
+    return NextResponse.json({ error: "エージェントの最大試行回数を超えました" }, { status: 500 });
+  } catch (e) {
+    console.error("[article] unexpected error:", e);
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "予期せぬエラーが発生しました" },
+      { status: 500 }
+    );
+  }
 }
