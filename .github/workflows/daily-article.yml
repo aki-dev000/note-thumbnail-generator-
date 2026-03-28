@@ -1,0 +1,39 @@
+name: Daily Article Generator
+
+on:
+  schedule:
+    # 毎朝 9:00 JST (= UTC 00:00) に実行
+    - cron: "0 0 * * *"
+  workflow_dispatch: # 手動実行も可能
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate article
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          # CI環境ではリポジトリ内の有料Note/に保存
+          OUTPUT_DIR: ${{ github.workspace }}/有料Note
+        run: npx tsx scripts/daily-article.ts
+
+      - name: Commit generated article
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add 有料Note/
+          git diff --cached --quiet || git commit -m "chore: 有料Note記事を自動生成 $(date +'%Y-%m-%d')"
+          git push
