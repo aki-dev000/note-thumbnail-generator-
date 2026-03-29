@@ -43,12 +43,15 @@ function fixJsonString(str: string): string {
   let escaped = false;
   for (let i = 0; i < str.length; i++) {
     const char = str[i];
+    const code = char.charCodeAt(0);
     if (escaped) { result += char; escaped = false; continue; }
     if (char === "\\" && inString) { result += char; escaped = true; continue; }
     if (char === '"') { inString = !inString; result += char; continue; }
-    if (inString && char === "\n") { result += "\\n"; continue; }
-    if (inString && char === "\r") { result += "\\r"; continue; }
-    if (inString && char === "\t") { result += "\\t"; continue; }
+    // 文字列内の制御文字（0x00-0x1F）をすべてエスケープ
+    if (inString && code < 32) {
+      result += `\\u${code.toString(16).padStart(4, "0")}`;
+      continue;
+    }
     result += char;
   }
   return result;
