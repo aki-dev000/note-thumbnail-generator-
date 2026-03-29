@@ -10,8 +10,6 @@ jobs:
   generate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    permissions:
-      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -33,14 +31,6 @@ jobs:
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           OUTPUT_DIR: ${{ github.workspace }}/有料Note
         run: npx tsx scripts/daily-article.ts
-
-      - name: Commit generated article
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add 有料Note/
-          git diff --cached --quiet || git commit -m "chore: 有料Note記事を自動生成 $(date +'%Y-%m-%d')"
-          git push
 
       - name: Post to note.com
         env:

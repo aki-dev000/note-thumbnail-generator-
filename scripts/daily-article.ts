@@ -227,8 +227,10 @@ function saveToFile(topic: string, result: ArticleResult, dateStr: string): stri
 
   mkdirSync(OUTPUT_DIR, { recursive: true });
 
-  const sourcesText = result.sources.map((s) => `- [${s.title}](${s.url})`).join("\n");
-  const videosText = result.videos
+  const sources = Array.isArray(result.sources) ? result.sources : [];
+  const videos = Array.isArray(result.videos) ? result.videos : [];
+  const sourcesText = sources.map((s) => `- [${s.title}](${s.url})`).join("\n");
+  const videosText = videos
     .map((v) => `${v.rank}. [${v.title}](${v.url}) - ${v.reason}`)
     .join("\n");
 
