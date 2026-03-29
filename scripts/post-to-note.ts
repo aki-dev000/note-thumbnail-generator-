@@ -48,11 +48,13 @@ async function postToNote(title: string, body: string) {
   const page = await context.newPage();
 
   try {
-    // ログイン確認
+    // ログイン確認（ログインページにリダイレクトされなければOK）
     await page.goto("https://note.com", { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(2000);
-    const isLoggedIn = await page.locator('[data-testid="header-user-icon"], .o-header__user').isVisible({ timeout: 5000 }).catch(() => false);
-    if (!isLoggedIn) throw new Error("クッキーが無効です。get-note-cookies.ts を再実行してください");
+    const currentUrl = page.url();
+    if (currentUrl.includes("/login")) {
+      throw new Error("クッキーが無効です。get-note-cookies.ts を再実行してください");
+    }
     console.log("  → セッション復元成功");
 
     // 新規テキスト記事ページへ
