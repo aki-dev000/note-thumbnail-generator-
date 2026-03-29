@@ -36,26 +36,6 @@ async function tavilySearch(query: string, youtube = false) {
   return results;
 }
 
-// ─── JSON 文字列修正 ────────────────────────────────────────────────────────
-function fixJsonString(str: string): string {
-  let result = "";
-  let inString = false;
-  let escaped = false;
-  for (let i = 0; i < str.length; i++) {
-    const char = str[i];
-    const code = char.charCodeAt(0);
-    if (escaped) { result += char; escaped = false; continue; }
-    if (char === "\\" && inString) { result += char; escaped = true; continue; }
-    if (char === '"') { inString = !inString; result += char; continue; }
-    // 文字列内の制御文字（0x00-0x1F）をすべてエスケープ
-    if (inString && code < 32) {
-      result += `\\u${code.toString(16).padStart(4, "0")}`;
-      continue;
-    }
-    result += char;
-  }
-  return result;
-}
 
 // ─── Step 1: トレンドテーマを自動決定 ────────────────────────────────────────
 async function chooseTopic(): Promise<string> {
@@ -102,6 +82,7 @@ type ArticleResult = {
 async function generateArticle(query: string): Promise<ArticleResult> {
   console.log("✍️  Step 2: 記事生成中...");
 
+  // 検索ツール + 記事保存ツール（構造化出力を強制するために使用）
   const tools: Anthropic.Tool[] = [
     {
       name: "web_search",
@@ -121,25 +102,59 @@ async function generateArticle(query: string): Promise<ArticleResult> {
         required: ["query"],
       },
     },
+    {
+      name: "save_article",
+      description: "記事の生成が完了したら、必ずこのツールを呼び出して記事を保存してください。",
+      input_schema: {
+        type: "object" as const,
+        properties: {
+          title: {
+            type: "string",
+            description: "記事タイトル（30文字以内、有料記事らしい具体的な価値を示すタイトル）",
+          },
+          article: {
+            type: "string",
+            description: "note有料記事本文（3000〜4000文字。## 見出し、### 小見出しを使ったマークダウン形式。リード文→背景→本論3セクション→実践ステップ→まとめ の構成。具体的な数字・事例を含める）",
+          },
+          summary: {
+            type: "string",
+            description: "記事の要約（200文字程度）",
+          },
+          sources: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                title: { type: "string" },
+                url: { type: "string" },
+              },
+              required: ["title", "url"],
+            },
+          },
+          videos: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                rank: { type: "number" },
+                title: { type: "string" },
+                url: { type: "string" },
+                reason: { type: "string" },
+              },
+              required: ["rank", "title", "url", "reason"],
+            },
+          },
+        },
+        required: ["title", "article", "summary", "sources", "videos"],
+      },
+    },
   ];
 
   const systemPrompt = `あなたはnote有料記事作成の専門AIです。
-ユーザーのテーマについて以下を実行してください：
+以下の手順で記事を作成してください：
 1. web_searchを2回使って最新情報を収集する
 2. youtube_searchを1回使って関連動画を検索する
-3. 収集した情報をもとに、以下のJSON形式のみで回答する（JSON以外のテキスト不可）：
-
-{
-  "title": "記事タイトル（30文字以内、有料記事らしい具体的な価値を示すタイトル）",
-  "article": "note有料記事本文（3000〜4000文字。## 見出し、### 小見出しを使ったマークダウン形式。リード文→背景→本論3セクション→実践ステップ→まとめ の構成。具体的な数字・事例を含める）",
-  "summary": "記事の要約（200文字程度）",
-  "sources": [{"title": "タイトル", "url": "https://..."}],
-  "videos": [
-    {"rank": 1, "title": "動画タイトル", "url": "https://www.youtube.com/watch?v=...", "reason": "推薦理由"},
-    {"rank": 2, "title": "...", "url": "...", "reason": "..."},
-    {"rank": 3, "title": "...", "url": "...", "reason": "..."}
-  ]
-}`;
+3. 収集した情報をもとに記事を執筆し、save_articleツールで保存する`;
 
   const messages: Anthropic.MessageParam[] = [
     { role: "user", content: `「${query}」をテーマにnote有料記事を作成してください。` },
@@ -160,24 +175,20 @@ async function generateArticle(query: string): Promise<ArticleResult> {
 
     messages.push({ role: "assistant", content: response.content });
 
-    if (response.stop_reason === "end_turn") {
-      const textBlock = response.content.find((b) => b.type === "text");
-      if (!textBlock || textBlock.type !== "text") throw new Error("エージェントからの応答がありません");
-
-      const jsonMatch = textBlock.text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("レスポンスの形式が不正です");
-
-      const parsed = JSON.parse(fixJsonString(jsonMatch[0])) as ArticleResult;
-      console.log(`  → タイトル: 「${parsed.title}」`);
-      console.log(`  → 文字数: ${parsed.article.length}文字`);
-      return parsed;
-    }
-
     if (response.stop_reason === "tool_use") {
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
 
       for (const block of response.content) {
         if (block.type !== "tool_use") continue;
+
+        // save_article ツールが呼ばれたら記事データを返す
+        if (block.name === "save_article") {
+          const result = block.input as ArticleResult;
+          console.log(`  → タイトル: 「${result.title}」`);
+          console.log(`  → 文字数: ${result.article.length}文字`);
+          return result;
+        }
+
         const input = block.input as { query: string };
         console.log(`  🔍 ${block.name}: "${input.query}"`);
 
@@ -197,7 +208,13 @@ async function generateArticle(query: string): Promise<ArticleResult> {
         }
       }
 
-      messages.push({ role: "user", content: toolResults });
+      if (toolResults.length > 0) {
+        messages.push({ role: "user", content: toolResults });
+      }
+    }
+
+    if (response.stop_reason === "end_turn") {
+      throw new Error("save_article ツールが呼ばれませんでした");
     }
   }
 
