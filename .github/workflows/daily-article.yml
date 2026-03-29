@@ -9,7 +9,7 @@ on:
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: write
 
@@ -24,11 +24,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
       - name: Generate article
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-          # CI環境ではリポジトリ内の有料Note/に保存
           OUTPUT_DIR: ${{ github.workspace }}/有料Note
         run: npx tsx scripts/daily-article.ts
 
@@ -39,3 +41,11 @@ jobs:
           git add 有料Note/
           git diff --cached --quiet || git commit -m "chore: 有料Note記事を自動生成 $(date +'%Y-%m-%d')"
           git push
+
+      - name: Post to note.com
+        env:
+          NOTE_EMAIL: ${{ secrets.NOTE_EMAIL }}
+          NOTE_PASSWORD: ${{ secrets.NOTE_PASSWORD }}
+          NOTE_PRICE: ${{ secrets.NOTE_PRICE }}
+          OUTPUT_DIR: ${{ github.workspace }}/有料Note
+        run: npx tsx scripts/post-to-note.ts
