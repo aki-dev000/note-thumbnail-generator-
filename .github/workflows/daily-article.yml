@@ -9,7 +9,9 @@ on:
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -22,9 +24,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright Chromium
-        run: npx playwright install chromium --with-deps
-
       - name: Generate article
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -32,17 +31,10 @@ jobs:
           OUTPUT_DIR: ${{ github.workspace }}/有料Note
         run: npx tsx scripts/daily-article.ts
 
-      - name: Post to note.com
-        env:
-          NOTE_COOKIES: ${{ secrets.NOTE_COOKIES }}
-          NOTE_PRICE: ${{ secrets.NOTE_PRICE }}
-          OUTPUT_DIR: ${{ github.workspace }}/有料Note
-        run: npx tsx scripts/post-to-note.ts
-
-      - name: Upload screenshots on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug-screenshots
-          path: /tmp/*.png
-          retention-days: 3
+      - name: Commit generated article
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add 有料Note/
+          git diff --cached --quiet || git commit -m "chore: 有料Note記事を自動生成 $(date +'%Y-%m-%d')"
+          git push
