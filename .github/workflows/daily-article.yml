@@ -49,3 +49,11 @@ jobs:
           NOTE_PRICE: ${{ secrets.NOTE_PRICE }}
           OUTPUT_DIR: ${{ github.workspace }}/有料Note
         run: npx tsx scripts/post-to-note.ts
+
+      - name: Upload screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshots
+          path: /tmp/*.png
+          retention-days: 3

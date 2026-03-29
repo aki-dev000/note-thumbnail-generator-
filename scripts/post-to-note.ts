@@ -48,62 +48,66 @@ async function postToNote(title: string, body: string) {
     // ── ログイン ──
     console.log("  🔑 ログイン中...");
     await page.goto("https://note.com/login", { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
 
-    await page.locator('input[name="email"]').fill(NOTE_EMAIL);
-    await page.locator('input[name="password"]').fill(NOTE_PASSWORD);
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL(/note\.com\/(?!login)/, { timeout: 15000 });
+    await page.locator("input#email").fill(NOTE_EMAIL);
+    await page.locator("input#password").fill(NOTE_PASSWORD);
+    // ログインボタン（data-type="primary"）が有効になるまで待つ
+    await page.locator('button[data-type="primary"]').last().waitFor({ state: "visible" });
+    await page.locator('button[data-type="primary"]').last().click();
+    await page.waitForURL(/note\.com\/(?!login)/, { timeout: 20000 });
     console.log("  → ログイン成功");
 
     // ── 新規テキスト記事を作成 ──
     console.log("  📝 新規記事ページへ移動...");
     await page.goto("https://note.com/notes/new?kind=text", { waitUntil: "domcontentloaded" });
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
+    await page.screenshot({ path: "/tmp/note-editor.png" });
+    console.log("  → スクリーンショット: /tmp/note-editor.png");
 
     // ── タイトル入力 ──
-    const titleSelector = 'textarea[placeholder*="タイトル"], input[placeholder*="タイトル"], .title-input textarea';
-    await page.locator(titleSelector).first().fill(title);
+    console.log("  📝 タイトルを入力中...");
+    const titleLocator = page.locator(
+      '.o-editable-title, textarea[placeholder*="タイトル"], input[placeholder*="タイトル"], [data-placeholder*="タイトル"]'
+    ).first();
+    await titleLocator.waitFor({ timeout: 10000 });
+    await titleLocator.click();
+    await titleLocator.fill(title);
+    await page.waitForTimeout(500);
 
     // ── 本文入力 ──
     console.log("  ✍️  本文を入力中...");
-    const editorSelector = '.ProseMirror, [contenteditable="true"], .editor-content';
-    const editor = page.locator(editorSelector).first();
-    await editor.click();
+    const editorLocator = page.locator(
+      '.ProseMirror, [contenteditable="true"][class*="editor"], [contenteditable="true"][class*="body"]'
+    ).first();
+    await editorLocator.waitFor({ timeout: 10000 });
+    await editorLocator.click();
+    // 長文は keyboard.insertText で挿入（clipboard API はヘッドレスで不安定）
     await page.keyboard.insertText(body);
     await page.waitForTimeout(1000);
 
     // ── 有料設定 ──
     console.log(`  💰 有料設定中（¥${NOTE_PRICE}）...`);
-
-    // 「公開設定」または「有料」ボタンを探す
-    const settingButton = page.locator(
-      'button:has-text("公開設定"), button:has-text("設定"), button[aria-label*="設定"]'
-    ).first();
-    if (await settingButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await settingButton.click();
-      await page.waitForTimeout(1000);
-    }
-
-    // 有料ラジオボタン or トグル
-    const paidOption = page.locator(
-      'label:has-text("有料"), input[value="paid"], button:has-text("有料")'
-    ).first();
-    if (await paidOption.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await paidOption.click();
+    const paidButton = page.locator('label:has-text("有料"), button:has-text("有料"), [data-label*="有料"]').first();
+    if (await paidButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await paidButton.click();
       await page.waitForTimeout(500);
-
-      // 価格入力
-      const priceInput = page.locator('input[name*="price"], input[placeholder*="価格"], input[placeholder*="円"]').first();
-      if (await priceInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+      const priceInput = page.locator(
+        'input[placeholder*="価格"], input[placeholder*="円"], input[name*="price"]'
+      ).first();
+      if (await priceInput.isVisible({ timeout: 3000 }).catch(() => false)) {
         await priceInput.fill(NOTE_PRICE);
       }
+    } else {
+      console.log("  ⚠️  有料設定UIが見つかりません（手動で設定してください）");
     }
 
     // ── 下書き保存 ──
     console.log("  💾 下書き保存中...");
     const saveButton = page.locator(
-      'button:has-text("下書き保存"), button:has-text("下書きとして保存")'
+      'button:has-text("下書き保存"), button:has-text("下書きとして保存"), button:has-text("保存")'
     ).first();
+    await saveButton.waitFor({ timeout: 10000 });
     await saveButton.click();
     await page.waitForTimeout(3000);
 
