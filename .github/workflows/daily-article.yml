@@ -34,8 +34,7 @@ jobs:
 
       - name: Post to note.com
         env:
-          NOTE_EMAIL: ${{ secrets.NOTE_EMAIL }}
-          NOTE_PASSWORD: ${{ secrets.NOTE_PASSWORD }}
+          NOTE_COOKIES: ${{ secrets.NOTE_COOKIES }}
           NOTE_PRICE: ${{ secrets.NOTE_PRICE }}
           OUTPUT_DIR: ${{ github.workspace }}/有料Note
         run: npx tsx scripts/post-to-note.ts
